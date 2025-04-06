@@ -42,11 +42,14 @@ YT_HEADERS_PREF_KEY = "ytmusic_headers"
 #   # No auth_headers needed here anymore
 # }
 
-async def main(req, res): # Changed to async def
+async def main(context):
     """
-    Appwrite function entry point to interact with YouTube Music API,
+    Appwrite function entry point for v3 runtime to interact with YouTube Music API,
     retrieving auth headers from user preferences.
     """
+    # Extract request and response objects from context
+    req = context.req
+    res = context.res
     payload_str = req.payload or '{}'
     try:
         payload = json.loads(payload_str)
