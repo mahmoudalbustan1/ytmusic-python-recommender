@@ -1,8 +1,30 @@
 import os
 import json
-from appwrite.client import Client
-from appwrite.services.users import Users
-from appwrite.exceptions import AppwriteException
+import sys
+
+# Try to import the Appwrite SDK with robust error handling
+try:
+    from appwrite.client import Client
+    from appwrite.services.users import Users
+    try:
+        # First try the exceptions (plural) module
+        from appwrite.exceptions import AppwriteException
+        print("Successfully imported from appwrite.exceptions")
+    except ImportError as e1:
+        print(f"Failed to import from appwrite.exceptions: {e1}")
+        try:
+            # Then try the exception (singular) module
+            from appwrite.exception import AppwriteException
+            print("Successfully imported from appwrite.exception")
+        except ImportError as e2:
+            print(f"Failed to import from appwrite.exception: {e2}")
+            # Use a generic Exception as fallback
+            print("Using generic Exception as fallback")
+            AppwriteException = Exception
+except ImportError as e:
+    print(f"Failed to import Appwrite SDK: {e}")
+    sys.exit(1)
+
 from ytmusicapi import YTMusic
 
 # Appwrite Environment Variables - These are automatically provided by Appwrite
