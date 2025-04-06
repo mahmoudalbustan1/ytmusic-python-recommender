@@ -1,3 +1,4 @@
-ytmusicapi==0.25.0
-appwrite==1.2.0
-requests==2.28.2
+ytmusicapi
+appwrite
+requests
+appwrite.exceptions
