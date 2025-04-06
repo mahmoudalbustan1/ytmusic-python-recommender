@@ -26,7 +26,14 @@ def main(context):
     # Print debug info
     print(f"Action: {action}")
     print(f"Payload: {payload}")
-    print(f"Environment: {dict(os.environ)}")
+    
+    # Use context.log for better logging in Appwrite
+    context.log(f"Processing action: {action}")
+    context.log(f"Payload received: {payload}")
+    
+    # Debug the action to make sure it's being parsed correctly
+    context.log(f"Action type: {type(action)}")
+    context.log(f"Action value: '{action}'")
     
     # For test_connection, just return success
     if action == 'test_connection':
