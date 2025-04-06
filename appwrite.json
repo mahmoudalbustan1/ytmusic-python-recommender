@@ -1,0 +1,17 @@
+{
+    "projectId": "reverbify",
+    "projectName": "Reverbify",
+    "functions": [
+        {
+            "$id": "ytmusic-recommender",
+            "name": "YouTube Music Recommender",
+            "runtime": "python-3.12",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "commands": "pip install -r requirements.txt"
+        }
+    ]
+}
