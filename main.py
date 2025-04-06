@@ -30,26 +30,26 @@ def main(context):
     
     # For test_connection, just return success
     if action == 'test_connection':
-        return {
+        return context.res.json({
             "success": True,
             "message": "Connection successful!",
             "action": action,
             "python_version": sys.version
-        }
+        })
         
     # For get_library_playlists, return dummy data
     elif action == 'get_library_playlists':
-        return {
+        return context.res.json({
             "success": True,
             "data": [
                 {"id": "PL123", "title": "My Playlist 1"},
                 {"id": "PL456", "title": "My Playlist 2"}
             ]
-        }
+        })
         
     # For get_home, return dummy data
     elif action == 'get_home':
-        return {
+        return context.res.json({
             "success": True,
             "data": [
                 {"title": "Recommended for you", "items": [
@@ -57,24 +57,24 @@ def main(context):
                     {"id": "song2", "title": "Song 2", "artist": "Artist 2"}
                 ]}
             ]
-        }
+        })
         
     # For get_recommendations, return dummy data
     elif action == 'get_recommendations':
-        return {
+        return context.res.json({
             "success": True,
             "data": [
                 {"id": "song3", "title": "Song 3", "artist": "Artist 3"},
                 {"id": "song4", "title": "Song 4", "artist": "Artist 4"}
             ]
-        }
+        })
         
     # For any other action, return an error
     else:
-        return {
+        return context.res.json({
             "success": False,
             "error": f"Unknown action: {action}"
-        }
+        }, 400)
         # Consider adding traceback here for detailed debugging if needed:
         # import traceback
         # context.error(traceback.format_exc())
