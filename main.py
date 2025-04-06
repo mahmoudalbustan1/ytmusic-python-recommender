@@ -32,21 +32,28 @@ def main(context):
     # context.log already called at the start
     
     # Get data from environment variable
-    # Get User ID and Payload
-    user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
+    # Get Payload
     payload_str = os.environ.get('APPWRITE_FUNCTION_DATA', '{}')
     context.log(f"Received payload: {payload_str}")
-    context.log(f"Executing as user: {user_id}")
     
-    # Parse input data
+    # Get User ID from environment OR payload (payload takes precedence)
+    env_user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
+    
+    # Parse payload first to check for user_id
     try:
         payload = json.loads(payload_str)
     except json.JSONDecodeError as e:
         context.error(f"Error parsing JSON payload: {e}")
         return context.res.json({"success": False, "error": "Invalid JSON payload"}, 400)
-    except Exception as e: # Catch other potential errors during loading
+    except Exception as e:
         context.error(f"Unexpected error parsing payload: {e}")
         return context.res.json({"success": False, "error": "Error processing request data"}, 400)
+    
+    # Get user_id from payload if available, otherwise use environment
+    user_id = payload.get('user_id', env_user_id)
+    context.log(f"Executing as user: {user_id}")
+    
+    # Payload is already parsed above
     
     # Get action from data
     action = payload.get('action') # Get action, default to None if not present
