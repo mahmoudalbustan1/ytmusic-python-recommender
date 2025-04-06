@@ -7,12 +7,14 @@ import sys
 from appwrite.client import Client
 from appwrite.services.users import Users
 from appwrite.exception import AppwriteException
+# Use context.log for startup messages if context is available early,
+# otherwise print is okay here before main() is called.
 print("Imported Appwrite SDK")
 try:
     from ytmusicapi import YTMusic
-    print("Successfully imported ytmusicapi")
+    print("Successfully imported ytmusicapi") # Print is okay here
 except ImportError as e:
-    print(f"Failed to import ytmusicapi: {e}")
+    print(f"Failed to import ytmusicapi: {e}") # Print is okay here
 
 # Define environment variables
 APPWRITE_ENDPOINT = os.environ.get("APPWRITE_ENDPOINT", "")
@@ -26,41 +28,41 @@ YT_HEADERS_PREF_KEY = 'ytmusic_headers'
 # Main function definition
 def main(context):
     """Appwrite function to interact with YTMusic API"""
-    # Print basic debug info
-    print("YouTube Music Recommender function started")
+    context.log("YouTube Music Recommender function started")
+    # context.log already called at the start
     
     # Get data from environment variable
     # Get User ID and Payload
     user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
     payload_str = os.environ.get('APPWRITE_FUNCTION_DATA', '{}')
-    print(f"Received payload: {payload_str}")
-    print(f"Executing as user: {user_id}")
+    context.log(f"Received payload: {payload_str}")
+    context.log(f"Executing as user: {user_id}")
     
     # Parse input data
     try:
         payload = json.loads(payload_str)
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON payload: {e}")
+        context.error(f"Error parsing JSON payload: {e}")
         return context.res.json({"success": False, "error": "Invalid JSON payload"}, 400)
     except Exception as e: # Catch other potential errors during loading
-        print(f"Unexpected error parsing payload: {e}")
+        context.error(f"Unexpected error parsing payload: {e}")
         return context.res.json({"success": False, "error": "Error processing request data"}, 400)
     
     # Get action from data
     action = payload.get('action') # Get action, default to None if not present
-    print(f"Requested action: {action}")
+    context.log(f"Requested action: {action}") # Use context.log
     
     # Validate User ID presence for most actions
     if not user_id and action != 'test_connection': # Allow test_connection without user_id
-        print("Error: Missing user ID (APPWRITE_FUNCTION_USER_ID not set).")
+        context.error("Missing user ID (APPWRITE_FUNCTION_USER_ID not set). Action requires user context.") # Use context.error
         return context.res.json({"success": False, "error": "User context required for this action"}, 401)
 
     # Validate Action presence
     if not action:
-        print("Error: Missing 'action' in payload.")
+        context.error("Missing 'action' in payload.") # Use context.error
         return context.res.json({"success": False, "error": "Missing 'action' parameter in request"}, 400)
 
-    print(f"Processing action '{action}' for user '{user_id or 'N/A'}'")
+    context.log(f"Processing action '{action}' for user '{user_id or 'N/A'}'") # Use context.log
 
     # --- Appwrite Client Initialization ---
     try:
@@ -72,7 +74,7 @@ def main(context):
         )
         users = Users(client)
     except Exception as e:
-        print(f"Error initializing Appwrite client: {e}")
+        context.error(f"Error initializing Appwrite client: {e}") # Use context.error
         return context.res.json({"success": False, "error": "Internal server error (Appwrite client)"}, 500)
 
     # --- Get YTMusic Headers from User Prefs ---
@@ -81,20 +83,20 @@ def main(context):
         # Use await since get_prefs is likely async in the Python SDK
         # get_prefs is synchronous in the Python SDK
         user_prefs = users.get_prefs(user_id=user_id)
-        auth_headers_str = user_prefs.data.get(YT_HEADERS_PREF_KEY)
+        auth_headers_str = user_prefs.get(YT_HEADERS_PREF_KEY) # Use .get on the dict directly
         if not auth_headers_str:
-            print(f"Error: YouTube Music headers not found in user preferences (key: {YT_HEADERS_PREF_KEY}).")
+            context.error(f"YouTube Music headers not found in user preferences (key: {YT_HEADERS_PREF_KEY}).") # Use context.error
             return context.res.json({
                 "success": False,
                 "error": "YouTube Music not configured. Please set up in app settings.",
                 "code": "YT_SETUP_REQUIRED"
             }, 400)
     except AppwriteException as e:
-        print(f"Error fetching user preferences: {e.message} (Code: {e.code})")
+        context.error(f"Appwrite error fetching user preferences: {e.message} (Code: {e.code})") # Use context.error
         # Handle specific cases like user not found (though unlikely if USER_ID is set)
-        return context.res.json({"success": False, "error": f"Could not retrieve user settings: {e.message}"}, 500)
+        return context.res.json({"success": False, "error": f"Could not retrieve user settings: {e.message}"}, e.code if e.code >= 400 else 500)
     except Exception as e:
-        print(f"Unexpected error fetching user preferences: {e}")
+        context.error(f"Unexpected error fetching user preferences: {e}") # Use context.error
         return context.res.json({"success": False, "error": "Internal server error (Prefs fetch)"}, 500)
 
 
@@ -104,18 +106,18 @@ def main(context):
         # Use the headers directly from prefs. ytmusicapi handles defaults.
         # Ensure 'Cookie' is present, as it's essential.
         if 'Cookie' not in headers:
-             print("Error: Missing required 'Cookie' header in stored preferences.")
+             context.error("Missing required 'Cookie' header in stored preferences.") # Use context.error
              return context.res.json({"success": False, "error": "Invalid YouTube Music configuration (Missing Cookie). Please re-configure."}, 400)
 
-        print(f"Using headers from prefs. Keys: {', '.join(headers.keys())}")
+        context.log(f"Using headers from prefs. Keys: {', '.join(headers.keys())}") # Use context.log
         ytmusic = YTMusic(auth=headers)
-        print("YTMusic initialized successfully using headers from prefs.")
+        context.log("YTMusic initialized successfully using headers from prefs.") # Use context.log
     except json.JSONDecodeError:
-        print("Error: Invalid JSON format for stored auth_headers.")
+        context.error(f"Invalid JSON format for stored auth_headers: {e}") # Use context.error and include exception
         # Maybe prompt user to re-configure?
-        return context.res.json({"success": False, "error": "Invalid YouTube Music configuration. Please re-configure in settings."}, 400)
+        return context.res.json({"success": False, "error": "Invalid YouTube Music configuration (Bad JSON). Please re-configure."}, 400)
     except Exception as e:
-        print(f"Error initializing YTMusic: {e}")
+        context.error(f"Error initializing YTMusic: {e}") # Use context.error
         return context.res.json({"success": False, "error": f"YouTube Music initialization failed: {e}"}, 500)
 
     # --- Perform Action based on payload ---
@@ -124,19 +126,19 @@ def main(context):
     try:
         if action == "get_library_playlists":
             playlists = ytmusic.get_library_playlists(limit=50)
-            print(f"Fetched {len(playlists)} playlists.")
+            context.log(f"Fetched {len(playlists)} playlists.") # Use context.log
             return context.res.json({"success": True, "data": playlists})
 
         elif action == "get_home":
              home_feed = ytmusic.get_home(limit=20)
-             print("Fetched home feed.")
+             context.log("Fetched home feed.") # Use context.log
              return context.res.json({"success": True, "data": home_feed})
 
         elif action == "get_recommendations":
             # Note: user_id might be needed if the library can't infer from headers,
             # but typically it does. Limit is optional.
             recommendations = ytmusic.get_recommendations(limit=20) # Example limit
-            print(f"Fetched {len(recommendations)} recommendations.")
+            context.log(f"Fetched {len(recommendations)} recommendations.") # Use context.log
             return context.res.json({"success": True, "data": recommendations})
             
         elif action == "test_connection":
@@ -144,7 +146,7 @@ def main(context):
             try:
                 # Try to get library playlists as a simple test
                 playlists = ytmusic.get_library_playlists(limit=1)
-                print("Authentication test successful")
+                context.log("Authentication test successful (fetched playlists).") # Use context.log
                 # If YTMusic was initialized, connection is implicitly tested
                 return context.res.json({
                     "success": True,
@@ -153,20 +155,23 @@ def main(context):
                     "python_version": sys.version
                 })
             except Exception as e:
-                print(f"Authentication test failed: {e}")
+                context.error(f"Authentication test failed during API call: {e}") # Use context.error
                 # If YTMusic init failed above, this won't be reached,
                 # but handle potential errors during the test call itself.
                 return context.res.json({
                     "success": False,
                     "error": f"Authentication test failed during API call: {e}",
-                    "code": "YT_API_ERROR"
+                    "code": "YT_API_ERROR" # Keep code consistent
                 }, 401) # Unauthorized or Bad Request might be appropriate
 
         else:
-            print(f"Error: Unknown action '{action}'.")
+            context.error(f"Unknown action '{action}'.") # Use context.error
             return context.res.json({"success": False, "error": f"Unknown action: {action}"}, 400)
 
     except Exception as e:
-        print(f"Error during YTMusic API call for action '{action}': {e}")
+        context.error(f"Error during YTMusic API call for action '{action}': {e}") # Use context.error
         # Consider logging the full traceback here for debugging
+        # Consider adding traceback here for detailed debugging if needed:
+        # import traceback
+        # context.error(traceback.format_exc())
         return context.res.json({"success": False, "error": f"API call failed for action '{action}': {e}"}, 500)
