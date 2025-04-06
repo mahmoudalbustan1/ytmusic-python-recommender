@@ -36,9 +36,16 @@ def main(context):
     payload_str = os.environ.get('APPWRITE_FUNCTION_DATA', '{}')
     context.log(f"Received payload: {payload_str}")
     
+    # Print detailed debug information
+    context.log(f"Function data environment variable: {os.environ.get('APPWRITE_FUNCTION_DATA', 'None')}")
+    context.log(f"Headers in request: {dir(context.req.headers) if hasattr(context.req, 'headers') else 'No headers attribute'}")
+    
     # Parse payload to check for direct auth_headers or user_id
     try:
         payload = json.loads(payload_str)
+        # Log the entire payload for debugging
+        context.log(f"Full payload: {json.dumps(payload)}")
+        context.log(f"Payload keys: {list(payload.keys()) if isinstance(payload, dict) else 'Not a dict'}")
     except json.JSONDecodeError as e:
         context.error(f"Error parsing JSON payload: {e}")
         return context.res.json({"success": False, "error": "Invalid JSON payload"}, 400)
@@ -46,15 +53,19 @@ def main(context):
         context.error(f"Unexpected error parsing payload: {e}")
         return context.res.json({"success": False, "error": "Error processing request data"}, 400)
     
-    # Check for auth_headers directly in payload (preferred method)
+    # Check for auth_headers directly in payload
     auth_headers_str = payload.get('auth_headers')
     if auth_headers_str:
-        context.log("Using auth_headers directly from payload")
+        context.log(f"Found auth_headers in payload with length: {len(str(auth_headers_str))}")
+    else:
+        context.log("No auth_headers found in payload")
     
-    # Get user_id as fallback method
+    # Get user_id from various sources
     env_user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
     user_id = payload.get('user_id', env_user_id)
-    context.log(f"User ID from payload/env: {user_id}")
+    context.log(f"User ID from payload: {payload.get('user_id', 'None')}")
+    context.log(f"User ID from env: {env_user_id}")
+    context.log(f"Final User ID: {user_id}")
     
     # Payload is already parsed above
     
