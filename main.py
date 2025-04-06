@@ -36,10 +36,7 @@ def main(context):
     payload_str = os.environ.get('APPWRITE_FUNCTION_DATA', '{}')
     context.log(f"Received payload: {payload_str}")
     
-    # Get User ID from environment OR payload (payload takes precedence)
-    env_user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
-    
-    # Parse payload first to check for user_id
+    # Parse payload to check for direct auth_headers or user_id
     try:
         payload = json.loads(payload_str)
     except json.JSONDecodeError as e:
@@ -49,9 +46,15 @@ def main(context):
         context.error(f"Unexpected error parsing payload: {e}")
         return context.res.json({"success": False, "error": "Error processing request data"}, 400)
     
-    # Get user_id from payload if available, otherwise use environment
+    # Check for auth_headers directly in payload (preferred method)
+    auth_headers_str = payload.get('auth_headers')
+    if auth_headers_str:
+        context.log("Using auth_headers directly from payload")
+    
+    # Get user_id as fallback method
+    env_user_id = os.environ.get('APPWRITE_FUNCTION_USER_ID')
     user_id = payload.get('user_id', env_user_id)
-    context.log(f"Executing as user: {user_id}")
+    context.log(f"User ID from payload/env: {user_id}")
     
     # Payload is already parsed above
     
@@ -59,10 +62,13 @@ def main(context):
     action = payload.get('action') # Get action, default to None if not present
     context.log(f"Requested action: {action}") # Use context.log
     
-    # Validate User ID presence for most actions
-    if not user_id and action != 'test_connection': # Allow test_connection without user_id
-        context.error("Missing user ID (APPWRITE_FUNCTION_USER_ID not set). Action requires user context.") # Use context.error
-        return context.res.json({"success": False, "error": "User context required for this action"}, 401)
+    # For test_connection with direct auth_headers, we don't need user_id
+    if action == 'test_connection':
+        context.log("Test connection requested, proceeding without user ID check")
+    # For other actions without auth_headers, validate user ID presence
+    elif not auth_headers_str and not user_id:
+        context.error("Missing both user ID and auth_headers. Action requires either user context or direct auth headers.")
+        return context.res.json({"success": False, "error": "User authentication required"}, 401)
 
     # Validate Action presence
     if not action:
@@ -71,40 +77,55 @@ def main(context):
 
     context.log(f"Processing action '{action}' for user '{user_id or 'N/A'}'") # Use context.log
 
-    # --- Appwrite Client Initialization ---
-    try:
-        client = Client()
-        (client
-         .set_endpoint(APPWRITE_ENDPOINT)
-         .set_project(APPWRITE_PROJECT_ID)
-         .set_key(APPWRITE_API_KEY) # Use API Key to fetch prefs
-        )
-        users = Users(client)
-    except Exception as e:
-        context.error(f"Error initializing Appwrite client: {e}") # Use context.error
-        return context.res.json({"success": False, "error": "Internal server error (Appwrite client)"}, 500)
+    # We'll initialize the client only if we need to fetch user prefs
 
-    # --- Get YTMusic Headers from User Prefs ---
+    # --- Get YTMusic Headers ---
     auth_headers_str = None
-    try:
-        # Use await since get_prefs is likely async in the Python SDK
-        # get_prefs is synchronous in the Python SDK
-        user_prefs = users.get_prefs(user_id=user_id)
-        auth_headers_str = user_prefs.get(YT_HEADERS_PREF_KEY) # Use .get on the dict directly
-        if not auth_headers_str:
-            context.error(f"YouTube Music headers not found in user preferences (key: {YT_HEADERS_PREF_KEY}).") # Use context.error
-            return context.res.json({
-                "success": False,
-                "error": "YouTube Music not configured. Please set up in app settings.",
-                "code": "YT_SETUP_REQUIRED"
-            }, 400)
-    except AppwriteException as e:
-        context.error(f"Appwrite error fetching user preferences: {e.message} (Code: {e.code})") # Use context.error
-        # Handle specific cases like user not found (though unlikely if USER_ID is set)
-        return context.res.json({"success": False, "error": f"Could not retrieve user settings: {e.message}"}, e.code if e.code >= 400 else 500)
-    except Exception as e:
-        context.error(f"Unexpected error fetching user preferences: {e}") # Use context.error
-        return context.res.json({"success": False, "error": "Internal server error (Prefs fetch)"}, 500)
+    
+    # First check if auth_headers were provided directly in the payload (preferred method)
+    if auth_headers_str:
+        context.log("Using auth_headers directly from payload")
+    # Otherwise, if we have a user_id, try to get from user prefs
+    elif user_id:
+        try:
+            # Initialize Appwrite client to get prefs
+            client = Client()
+            client.set_endpoint(APPWRITE_ENDPOINT).set_project(APPWRITE_PROJECT_ID).set_key(APPWRITE_API_KEY)
+            users = Users(client)
+            
+            # Get user prefs
+            user_prefs = users.get_prefs(user_id=user_id)
+            auth_headers_str = user_prefs.get(YT_HEADERS_PREF_KEY) # Use .get on the dict directly
+            
+            if not auth_headers_str:
+                context.error(f"YouTube Music headers not found in user preferences (key: {YT_HEADERS_PREF_KEY}).")
+                return context.res.json({
+                    "success": False,
+                    "error": "YouTube Music not configured. Please set up in app settings.",
+                    "code": "YT_SETUP_REQUIRED"
+                }, 400)
+                
+            context.log("Retrieved auth_headers from user preferences")
+        except AppwriteException as e:
+            context.error(f"Appwrite error fetching user preferences: {e.message} (Code: {e.code})")
+            return context.res.json({"success": False, "error": f"Could not retrieve user settings: {e.message}"}, e.code if e.code >= 400 else 500)
+        except Exception as e:
+            context.error(f"Unexpected error fetching user preferences: {e}")
+            return context.res.json({"success": False, "error": "Internal server error (Prefs fetch)"}, 500)
+    # If this is a test_connection with no auth_headers and no user_id
+    elif action == 'test_connection':
+        return context.res.json({
+            "success": True,
+            "message": "Connection successful but no auth headers available",
+            "requires_setup": True
+        })
+    else:
+        context.error("No auth_headers available and no user_id to fetch them")
+        return context.res.json({
+            "success": False,
+            "error": "YouTube Music not configured. No authentication headers available.",
+            "code": "YT_SETUP_REQUIRED"
+        }, 400)
 
 
     # --- YTMusicAPI Initialization ---
