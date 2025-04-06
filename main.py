@@ -15,11 +15,19 @@ def main(context):
     # Get the payload data
     try:
         payload_str = os.environ.get('APPWRITE_FUNCTION_DATA', '{}')
+        context.log(f"Raw payload string: {payload_str}")
         payload = json.loads(payload_str)
-        action = payload.get('action', 'test_connection')
+        
+        # Make sure we extract the action correctly
+        if isinstance(payload, dict) and 'action' in payload:
+            action = payload['action']
+            context.log(f"Found action in payload: {action}")
+        else:
+            action = 'test_connection'
+            context.log("No action found in payload, defaulting to test_connection")
     except Exception as e:
         # Even if there's an error, just log it and continue with defaults
-        print(f"Error parsing payload: {e}")
+        context.error(f"Error parsing payload: {e}")
         payload = {}
         action = 'test_connection'
     
