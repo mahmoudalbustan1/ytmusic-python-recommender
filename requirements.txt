@@ -1,4 +1,3 @@
 ytmusicapi
 appwrite
 requests
-appwrite.exceptions
