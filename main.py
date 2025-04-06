@@ -5,11 +5,11 @@ from appwrite.services.users import Users
 from appwrite.exceptions import AppwriteException
 from ytmusicapi import YTMusic
 
-# Appwrite Environment Variables
-APPWRITE_ENDPOINT = os.environ.get("APPWRITE_ENDPOINT")
-APPWRITE_PROJECT_ID = os.environ.get("APPWRITE_PROJECT_ID")
+# Appwrite Environment Variables - These are automatically provided by Appwrite
+APPWRITE_ENDPOINT = os.environ.get("APPWRITE_ENDPOINT") # Automatically set by Appwrite
+APPWRITE_PROJECT_ID = os.environ.get("APPWRITE_PROJECT_ID") # Automatically set by Appwrite
 APPWRITE_API_KEY = os.environ.get("APPWRITE_API_KEY") # Server API Key for admin actions like getting prefs
-APPWRITE_FUNCTION_USER_ID = os.environ.get("APPWRITE_FUNCTION_USER_ID") # ID of the user triggering the function
+APPWRITE_FUNCTION_USER_ID = os.environ.get("APPWRITE_FUNCTION_USER_ID") # Automatically set to the user who triggered the function
 
 # Key used to store headers in Appwrite User Prefs
 YT_HEADERS_PREF_KEY = "ytmusic_headers"
@@ -38,9 +38,14 @@ async def main(req, res): # Changed to async def
         print("Error: Missing 'action' in payload.")
         return res.json({"success": False, "error": "Missing 'action'"}, 400)
 
-    if not APPWRITE_FUNCTION_USER_ID:
-        print("Error: Function was not triggered by a logged-in user.")
+    # Get user_id from payload if provided, otherwise use the function user ID
+    user_id = payload.get("user_id") or APPWRITE_FUNCTION_USER_ID
+    
+    if not user_id:
+        print("Error: No user ID found in payload or environment.")
         return res.json({"success": False, "error": "User authentication required"}, 401)
+        
+    print(f"Using user ID: {user_id}")
 
     # --- Appwrite Client Initialization ---
     try:
@@ -59,7 +64,7 @@ async def main(req, res): # Changed to async def
     auth_headers_str = None
     try:
         # Use await since get_prefs is likely async in the Python SDK
-        user_prefs = await users.get_prefs(user_id=APPWRITE_FUNCTION_USER_ID)
+        user_prefs = await users.get_prefs(user_id=user_id)
         auth_headers_str = user_prefs.data.get(YT_HEADERS_PREF_KEY)
         if not auth_headers_str:
             print(f"Error: YouTube Music headers not found in user preferences (key: {YT_HEADERS_PREF_KEY}).")
